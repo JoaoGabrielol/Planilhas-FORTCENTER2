@@ -1,0 +1,8 @@
+streamlit
+msal
+pandas
+plotly
+unidecode
+requests
+django-environ
+openpyxl
