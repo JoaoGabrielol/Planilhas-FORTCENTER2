@@ -136,11 +136,7 @@ df['data'] = df['data'].dt.strftime('%d/%m/%Y')
 # Preencher valores ausentes em colunas numéricas com 0 (se aplicável)
 df[['mao de obra', 'pecas', 'valor r$']] = df[['mao de obra', 'pecas', 'valor r$']].fillna(0)
 
-# Preencher valores ausentes em colunas de texto com "Não Informado"
 df[['tecnico', 'observacao']] = df[['tecnico', 'observacao']].fillna("Não Informado")
-
-# Garantir que a coluna 'data' esteja em formato datetime
-df['data'] = pd.to_datetime(df['data'], errors='coerce')
 
 # Criar um seletor de período no Streamlit
 opcoes_periodo = [
@@ -318,7 +314,6 @@ colunas_numericas = ['mao de obra', 'pecas', 'valor r$']
 for coluna in colunas_numericas:
     df[coluna] = pd.to_numeric(df[coluna], errors='coerce').fillna(0)
 
-
 # Ajustar os DataFrames de tendência para usar "Mês/Ano" como eixo X
 ticket_medio_tendencia = df.groupby(['mes_ano', 'tecnico'])['valor r$'].mean().reset_index()
 ticket_medio_tendencia.rename(columns={'valor r$': 'ticket médio'}, inplace=True)
@@ -366,7 +361,6 @@ with col1:
             )
             st.plotly_chart(fig_ticket_tendencia, use_container_width=True)
 
-
 # Receita Total por Técnico
 st.subheader("Receita Total por Técnico")
 col3, col4 = st.columns(2)
@@ -396,34 +390,33 @@ with col3:
             st.plotly_chart(fig_receita_total_tendencia, use_container_width=True)
 
 # Receita de Mão de Obra por Técnico (Gráfico de Pizza)
-st.subheader("Receita de Mão de obra por Técnico")
+st.subheader("Receita Mão de obra por Técnico")
 col5, col6 = st.columns(2)
 with col5:
-    st.dataframe(receita_total)
+    st.dataframe(receita_mao_de_obra)
 with col6:
     fig_receita_mao_de_obra = px.pie(
         receita_mao_de_obra,
         names='tecnico',
         values='receita mão de obra',
-        title="Distribuição da Receita de Mão de Obra por Técnico",
+        title="Distribuição da Receita Mão de Obra por Técnico",
     )
     st.plotly_chart(fig_receita_mao_de_obra, use_container_width=True)
 
 with col5:
-    with st.expander("Tendência de Receita Total"):
-        if st.checkbox("Mostrar gráfico de tendência - Receita Total", key="receita_mao_de_obra_tendencia"):
-            fig_receita_total_tendencia = criar_grafico_tendencia(
-                receita_total_tendencia,
+    with st.expander("Tendência de Receita de mão de obra"):
+        if st.checkbox("Mostrar gráfico de tendência - Receita Mão de Obra", key="receita_mao_de_obra_tendencia"):
+            fig_receita_mao_de_obra_tendencia = criar_grafico_tendencia(
+                receita_mao_de_obra_tendencia,
                 'mes_ano',
-                'receita de mão de obra',
+                'receita mão de obra',
                 'tecnico',
                 "Tendência de Receita de mão de obra por Técnico",
-                {'mes_ano': 'Mês/Ano', 'receita de mão de obra': 'Receita de Mão de Obra (R$)'}
+                {'mes_ano': 'Mês/Ano', 'receita mão de obra': 'Receita Mão de Obra (R$)'}
             )
-            st.plotly_chart(receita_mao_de_obra_tendencia, use_container_width=True)
+            st.plotly_chart(fig_receita_mao_de_obra_tendencia, use_container_width=True)
 
-# Receita de Peças por Técnico (Gráfico de Pizza)
-
+# Receita de Peças por Técnico
 st.subheader("Receita de Peças por Técnico")
 col7, col8 = st.columns(2)
 with col7:
@@ -437,15 +430,16 @@ with col8:
     )
     st.plotly_chart(fig_receita_pecas, use_container_width=True)
 
+# Adicionar o gráfico de tendência abaixo
 with col7:
-    with st.expander("Tendência de Receita Total"):
-        if st.checkbox("Mostrar gráfico de tendência - Receita de Peças", key="receita_peças_tendencia"):
-            fig_receita_pecas = criar_grafico_tendencia(
+    with st.expander("Tendência de Receita de Peças"):
+        if st.checkbox("Mostrar gráfico de tendência - Peças", key="receita_pecas_tendencia"):
+            fig_receita_pecas_tendencia = criar_grafico_tendencia(
                 receita_pecas_tendencia,
                 'mes_ano',
-                'receita de peças',
+                'receita peças',
                 'tecnico',
-                "Tendência de Receita de peças por Técnico",
-                {'mes_ano': 'Mês/Ano', 'receita de peças': 'Receita de Peças (R$)'}
+                "Tendência de Receita de Peças por Técnico",
+                {'mes_ano': 'Mês/Ano', 'receita peças': 'Receita de Peças (R$)'}
             )
-            st.plotly_chart(receita_pecas_tendencia, use_container_width=True)
+            st.plotly_chart(fig_receita_pecas_tendencia, use_container_width=True)
