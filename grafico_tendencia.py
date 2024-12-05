@@ -1,4 +1,4 @@
-import plotly_express as px
+import plotly.express as px
 
 def criar_grafico_tendencia(df, x, y, grupo, titulo, labels):
     df = df.sort_values(by=x)
