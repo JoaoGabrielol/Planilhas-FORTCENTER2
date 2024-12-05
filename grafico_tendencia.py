@@ -1,11 +1,7 @@
-# grafico_tendencia.py
-
-import plotly.express as px
+import plotly_express as px
 
 def criar_grafico_tendencia(df, x, y, grupo, titulo, labels):
-    """
-    Cria um gráfico de tendência utilizando Plotly.
-    """
+    df = df.sort_values(by=x)
     fig = px.line(
         df,
         x=x,
@@ -13,7 +9,13 @@ def criar_grafico_tendencia(df, x, y, grupo, titulo, labels):
         color=grupo,
         title=titulo,
         labels=labels,
-        category_orders={x: sorted(df[x].unique())}  # Ordenar eixo X
+        markers=True
     )
-    fig.update_layout(xaxis_title="Mês/Ano", yaxis_title=y)
+   
+    # Configura o eixo X pra ser categórico
+    fig.update_layout(
+        xaxis_title="Mês/Ano",
+        yaxis_title=y,
+        xaxis=dict(type="category")
+    )
     return fig
