@@ -31,7 +31,7 @@ Certifique-se de ter as seguintes dependências instaladas no ambiente:
 Instale todas as dependências executando:
 ```bash
 pip install pandas streamlit requests msal plotly unidecode environ openpyxl
-
+```
 ---
 
 ## ⚙️ Configuração
