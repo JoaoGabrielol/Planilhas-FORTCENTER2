@@ -1,12 +1,11 @@
-import json
 import requests
+import json 
 from msal import ConfidentialClientApplication
 import streamlit as st
 import pandas as pd
 from unidecode import unidecode
 import plotly.express as px
 from datetime import datetime, timedelta
-from io import BytesIO
 import environ
 from grafico_tendencia import criar_grafico_tendencia
 
@@ -31,7 +30,7 @@ if not result:
 if "access_token" in result:
     access_token = result["access_token"]
 else:
-    raise Exception("No Access Token found")
+    raise Exceptn("No Access Token found")
 
 headers = {
     "Authorization": f"Bearer {access_token}",
