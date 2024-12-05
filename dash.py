@@ -1,11 +1,12 @@
+import json
 import requests
-import json 
 from msal import ConfidentialClientApplication
 import streamlit as st
 import pandas as pd
 from unidecode import unidecode
 import plotly.express as px
 from datetime import datetime, timedelta
+from io import BytesIO
 import environ
 from grafico_tendencia import criar_grafico_tendencia
 
@@ -30,7 +31,7 @@ if not result:
 if "access_token" in result:
     access_token = result["access_token"]
 else:
-    raise Exceptn("No Access Token found")
+    raise Exception("No Access Token found")
 
 headers = {
     "Authorization": f"Bearer {access_token}",
@@ -110,6 +111,19 @@ df[['mao de obra', 'pecas', 'valor r$']] = df[['mao de obra', 'pecas', 'valor r$
 
 df[['tecnico', 'observacao']] = df[['tecnico', 'observacao']].fillna("Não Informado")
 
+st.set_page_config(layout= "centered", page_title="Análise de Receitas", page_icon="📊")
+
+st.markdown(
+    """
+    <style>
+    .main-title { font-size: 42px; font-weight: bold; color: #FFFAFA; text-align: center; margin-bottom: 20px; }
+    .table-title { font-size: 30px; font-weight: bold; color: #F8F8FF; text-align: center; margin-top: 20px; margin-bottom: 20px; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+st.markdown('<div class="main-title">Análise Financeira de Receitas</div>', unsafe_allow_html=True)
+
 opcoes_periodo = [
     "Semana Atual",
     "Semana Passada",
@@ -188,8 +202,6 @@ receita_pecas = df_filtrado.groupby('tecnico')['pecas'].sum().reset_index()
 receita_pecas.rename(columns={'pecas': 'receita peças'}, inplace=True)
 receita_pecas = receita_pecas.sort_values(by='receita peças', ascending=False)
 
-st.title("Análise de Dados por Técnico")
-
 df['mes_ano'] = df['data'].dt.to_period('M').astype(str) 
 
 df_mensal = df.groupby(['mes_ano', 'tecnico'])['valor r$'].sum().reset_index()
@@ -234,8 +246,6 @@ fim = inicio + num_tecnicos_por_pagina
 tecnicos_filtrados = tecnicos_unicos[inicio:fim]
 
 df_pagina = df_mensal[df_mensal['tecnico'].isin(tecnicos_filtrados)]
-
-st.write(f"Exibindo técnicos: {', '.join(tecnicos_filtrados)}")
 
 inicio = (pagina_selecionada - 1) * num_tecnicos_por_pagina
 fim = inicio + num_tecnicos_por_pagina
@@ -282,6 +292,8 @@ with col2:
         labels={'tecnico': 'Técnico', 'ticket médio': 'Ticket Médio (R$)'}
     )
     st.plotly_chart(fig_ticket_medio, use_container_width=True)
+
+st.write(f"Exibindo técnicos: {', '.join(tecnicos_filtrados)}")
 
 with col1:
     with st.expander("Tendência de Ticket Médio"):
