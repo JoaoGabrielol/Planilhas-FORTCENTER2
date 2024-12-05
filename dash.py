@@ -276,8 +276,6 @@ receita_pecas_tendencia = df.groupby(['mes_ano', 'tecnico'])['pecas'].mean().res
 receita_pecas_tendencia.rename(columns={'pecas': 'receita peças'}, inplace=True)
 receita_pecas_tendencia = receita_pecas_tendencia[receita_pecas_tendencia['tecnico'].isin(tecnicos_filtrados)]
 
-print(df['mes_ano'].unique())
-
 st.subheader("Ticket Médio por Técnico")
 col1, col2 = st.columns(2)
 with col1:
