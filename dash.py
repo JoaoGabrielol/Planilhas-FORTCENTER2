@@ -276,6 +276,16 @@ receita_pecas_tendencia = df.groupby(['mes_ano', 'tecnico'])['pecas'].mean().res
 receita_pecas_tendencia.rename(columns={'pecas': 'receita peças'}, inplace=True)
 receita_pecas_tendencia = receita_pecas_tendencia[receita_pecas_tendencia['tecnico'].isin(tecnicos_filtrados)]
 
+st.markdown("## Métricas de Receitas")
+col1, col2, col3 = st.columns(3)
+total_receitas = df_filtrado['valor r$'].sum()
+num_transacoes = len(df_filtrado)
+valor_medio = df_filtrado['valor r$'].mean()
+
+col1.metric("Total de Receitas", f"R$ {total_receitas:,.2f}", delta_color="inverse")
+col2.metric("Número de Transações", num_transacoes)
+col3.metric("Valor Médio por Transação", f"R$ {valor_medio:,.2f}")
+
 st.subheader("Ticket Médio por Técnico")
 col1, col2 = st.columns(2)
 with col1:
