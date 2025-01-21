@@ -40,7 +40,7 @@ headers = {
 
 drive_id = env("drive_id")
 file_paths = {
-    "P._conta_atualizado.xlsx": "/P.conta%202024%20atualizado%20(3).xlsx",
+    "P._conta_2025.xlsx": "/P.conta%202025.xlsx",
     "Recebimentos_Caixa.xlsx": "/Recebimentos%20Caixa%20(1).xlsx"
 }
 
@@ -61,7 +61,7 @@ planilha_1 = pd.read_excel(
     'Recebimentos_Caixa.xlsx', sheet_name='ENTRADAS', skiprows=4, header=0
 )
 planilha_2 = pd.read_excel(
-    'P._conta_atualizado.xlsx', sheet_name='Prestação', skiprows=5, header=0
+    'P._conta_2025.xlsx', sheet_name='Prestação', skiprows=5, header=0
 )
 
 def padronizar_colunas(df):
