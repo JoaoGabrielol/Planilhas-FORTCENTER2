@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import environ
-from modulo_dados import autenticar_msal, baixar_arquivo, carregar_planilha, processar_arquivos
-from utils import filtrar_dados, calcular_metricas
-import plotly_express as px
+from dados_despesas import autenticar_msal, processar_arquivos
+from utils_despesas import padronizar_e_limpar, filtrar_dados, calcular_metricas
+import plotly.express as px
+import re
+from datetime import datetime
 
 env = environ.Env()
 environ.Env().read_env()
@@ -11,130 +13,163 @@ environ.Env().read_env()
 drive_id = env("drive_id")
 
 arquivos = [
-    {"nome": "Recebimentos_Caixa.xlsx", "caminho": "/Recebimentos%20Caixa%20(1).xlsx", "aba": "ENTRADAS", "linhas_pular": 4},
-    {"nome": "P._conta_2025.xlsx", "caminho": "/P.conta%202025.xlsx", "aba": "Prestação", "linhas_pular": 5},
-    {"nome": "Venda_Balcao.xlsx", "caminho": "/Venda%20Balc%C3%A3o.xlsx", "aba": None, "linhas_pular": 0} 
+    {"nome": "Recebimentos_Caixa.xlsx", "caminho": "/Recebimentos%20Caixa%20(1).xlsx", "aba": "LANÇAMENTO DESPESAS", "linhas_pular": 3},
+    {"nome": "PLANILHA_DE_CUSTO.xlsx", "caminho": "/PLANILHA%20DE%20CUSTO%202025.xlsx", "aba": "LANÇAMENTO DESPESAS", "linhas_pular": 3},
 ]
 
 token = autenticar_msal()
 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 df = processar_arquivos(arquivos, drive_id, headers)
+df = padronizar_e_limpar(df)
 
-df_venda_balcao = pd.read_excel("Venda_Balcao.xlsx", header=0, usecols=['Dt. Neg.', 'Vlr. Nota'])
-df_venda_balcao.rename(columns={'Dt. Neg.': 'DATA', 'Vlr. Nota': 'VALOR R$'}, inplace=True)
-df["ORIGEM"] = "Outras Planilhas"
-df_venda_balcao["ORIGEM"] = "Venda_Balcao"
+st.set_page_config(layout="wide", page_title="Análise Financeira de Despesas", page_icon="💸")
 
-df = pd.concat([df, df_venda_balcao], ignore_index=True)
-df_balcao = df[df['ORIGEM'] == 'Venda_Balcao']
+st.sidebar.header("Filtros")
+opcoes_periodo = [
+    "Semana Atual", "Semana Passada", "Mês Atual", "Mês Passado",
+    "Últimos 3 Meses", "Últimos 6 Meses",
+    "Ano Atual", "Ano Passado", "Tempo Todo"
+]
+periodo_selecionado = st.sidebar.selectbox("Selecione o período:", opcoes_periodo)
 
-df = df.dropna(subset=["DATA"], how="any")
-
-st.set_page_config(layout="centered", page_title="Análise de Receitas", page_icon="📊")
-st.title("Dashboard de Análise Financeira")
-
-opcoes_periodo = ["Semana Atual", "Semana Passada", "Mês Atual", "Mês Passado", "Últimos 3 Meses", "Últimos 6 Meses", "Ano Atual", "Ano Passado", "Tempo Todo"]
-periodo_selecionado = st.selectbox("Selecione o Período:", opcoes_periodo)
-
+# Filtro de período
 df_filtrado, inicio_periodo, fim_periodo = filtrar_dados(df, periodo_selecionado)
 
+# Filtros dinâmicos (multi-select) para grupo, tipo, usuário
+grupo_options = sorted(df_filtrado["GRUPO DESPESAS"].unique())
+tipo_options = sorted(df_filtrado["TIPO DESPESAS"].unique())
+usuario_options = sorted(df_filtrado["USUÁRIO"].unique())
+
+grupo_selecionado = st.sidebar.multiselect("Selecione o(s) Grupo(s) de Despesas:", grupo_options)
+tipo_selecionado = st.sidebar.multiselect("Selecione o(s) Tipo(s) de Despesa:", tipo_options)
+usuario_selecionado = st.sidebar.multiselect("Selecione o(s) Usuário(s):", usuario_options)
+
+min_valor = float(df_filtrado["VALOR R$"].min())
+max_valor = float(df_filtrado["VALOR R$"].max())
+intervalo_valor = st.sidebar.slider(
+    "Selecione o intervalo de valores (R$):",
+    min_value=min_valor, max_value=max_valor,
+    value=(min_valor, max_valor), step=1.0
+)
+
+# aplica os filtros ao DataFrame
+df_exibicao = df_filtrado.copy()
+if grupo_selecionado:
+    df_exibicao = df_exibicao[df_exibicao["GRUPO DESPESAS"].isin(grupo_selecionado)]
+if tipo_selecionado:
+    df_exibicao = df_exibicao[df_exibicao["TIPO DESPESAS"].isin(tipo_selecionado)]
+if usuario_selecionado:
+    df_exibicao = df_exibicao[df_exibicao["USUÁRIO"].isin(usuario_selecionado)]
+df_exibicao = df_exibicao[(df_exibicao["VALOR R$"] >= intervalo_valor[0]) & (df_exibicao["VALOR R$"] <= intervalo_valor[1])]
+
+df_exibicao_formatado = df_exibicao.copy()
+
+df_exibicao_formatado["DATA"] = df_exibicao_formatado["DATA"].dt.strftime("%d/%m/%Y")
+
+def limpar_descricao(valor):
+    # Se for pandas Timestamp ou datetime.datetime (do Python)
+    if isinstance(valor, pd.Timestamp) or isinstance(valor, datetime):
+        return valor.strftime("%d/%m/%Y")
+    # Se for string que parece data, tenta converter
+    if isinstance(valor, str):
+        try:
+            data = pd.to_datetime(valor, format='%Y-%m-%d %H:%M:%S', errors='raise')
+            return data.strftime("%d/%m/%Y")
+        except:
+            return valor
+    return str(valor)
+
+df_exibicao_formatado.loc[:, "DESCRIÇÃO DESPESA"] = df_exibicao_formatado["DESCRIÇÃO DESPESA"].apply(limpar_descricao)
+
+df_exibicao_formatado["VALOR R$"] = df_exibicao_formatado["VALOR R$"].apply(
+    lambda x: f"R$ {x:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
+)
+
+df_exibicao_formatado = df_exibicao_formatado.rename(columns={
+    "DATA": "Data",
+    "GRUPO DESPESAS": "Grupo Despesa",
+    "TIPO DESPESAS": "Tipo Despesa",
+    "USUÁRIO": "Usuário",
+    "DESCRIÇÃO DESPESA": "Descrição Despesa",
+    "VALOR R$": "Valor R$"
+})
+df_exibicao_formatado.reset_index(drop=True, inplace=True)
+df_exibicao_formatado.index += 1
+
+# --- INTERFACE PRINCIPAL ---
+st.markdown(
+    "<h1 style='text-align:center; font-size:36px;'>📊 Análise Financeira de Despesas</h1>",
+    unsafe_allow_html=True
+)
+
 if inicio_periodo and fim_periodo:
-    st.write(f"**Início do Período:** {inicio_periodo.strftime('%d/%m/%Y')}")
-    st.write(f"**Fim do Período:** {fim_periodo.strftime('%d/%m/%Y')}")
+    st.write(f"**Período selecionado:** {inicio_periodo.strftime('%d/%m/%Y')} a {fim_periodo.strftime('%d/%m/%Y')}")
 
-st.markdown("## Métricas de Receitas")
-vendas_total, receita_media, quantidade_transacoes = calcular_metricas(df_filtrado)
+# tabela de dados filtrados
+st.markdown(
+    """
+    <style>
+        .css-1d391kg { font-size: 15px; }
+        tbody tr td { text-align: left; font-size: 14px; }
+    </style>
+    """, unsafe_allow_html=True
+)
+
+st.dataframe(
+    df_exibicao_formatado,
+    use_container_width=True
+)
+
+st.markdown("## Métricas de Despesas")
+total_despesas, media_despesas, quantidade_transacoes = calcular_metricas(df_exibicao)
 col1, col2, col3 = st.columns(3)
+col1.metric("💸 Total de Despesas", f"R$ {total_despesas:,.2f}")
+col2.metric("🧾 Transações", quantidade_transacoes)
+col3.metric("📈 Média por Transação", f"R$ {media_despesas:,.2f}")
 
-col1.metric("Total de Vendas", f"R$ {vendas_total:,.2f}", delta_color="inverse")
-col2.metric("Número de Transações", quantidade_transacoes)
-col3.metric("Valor Médio por Transação", f"R$ {receita_media:,.2f}")
+st.markdown("## Despesas por Grupo")
+grupo_despesas = df_filtrado.groupby("GRUPO DESPESAS")["VALOR R$"].sum().reset_index().sort_values(by="VALOR R$", ascending=False)
+col4, col5 = st.columns(2)
+with col4:
+    st.dataframe(grupo_despesas)
+with col5:
+    fig_grupo = px.pie(grupo_despesas, names="GRUPO DESPESAS", values="VALOR R$", title="Despesas por Grupo")
+    st.plotly_chart(fig_grupo, use_container_width=True)
 
-df_balcao_filtrado, _, _ = filtrar_dados(df_balcao, periodo_selecionado)
+st.markdown("## Despesas por Tipo")
+tipo_despesas = df_filtrado.groupby("TIPO DESPESAS")["VALOR R$"].sum().reset_index().sort_values(by="VALOR R$", ascending=False)
+col6, col7 = st.columns(2)
+with col6:
+    st.dataframe(tipo_despesas)
+with col7:
+    fig_tipo = px.bar(tipo_despesas, x="TIPO DESPESAS", y="VALOR R$", title="Despesas por Tipo", color="TIPO DESPESAS")
+    st.plotly_chart(fig_tipo, use_container_width=True)
 
-# 📊 Calcular métricas para Vendas Balcão
-receita_balcao_total = df_balcao_filtrado['VALOR R$'].sum()
-receita_balcao_media = df_balcao_filtrado['VALOR R$'].mean() if not df_balcao_filtrado.empty else 0
-quantidade_balcao_transacoes = len(df_balcao_filtrado)
+st.markdown("## Despesas por Usuário")
+usuario_despesas = df_filtrado.copy()
+usuario_despesas = usuario_despesas.groupby("USUÁRIO", as_index=False)["VALOR R$"].sum()
+usuario_despesas = usuario_despesas.sort_values(by="VALOR R$", ascending=False)
+col8, col9 = st.columns(2)
+with col8:
+    st.dataframe(usuario_despesas)
+with col9:
+    fig_usuario = px.bar(usuario_despesas, x="USUÁRIO", y="VALOR R$", title="Despesas por Usuário", color="USUÁRIO")
+    st.plotly_chart(fig_usuario, use_container_width=True)
 
-# 🔹 Exibir métricas de Vendas Balcão
-st.markdown("## Métricas de Vendas Balcão")
-col_balcao1, col_balcao2, col_balcao3 = st.columns(3)
-
-col_balcao1.metric("Total de Vendas Balcão", f"R$ {receita_balcao_total:,.2f}", delta_color="inverse")
-col_balcao2.metric("Número de Transações Balcão", quantidade_balcao_transacoes)
-col_balcao3.metric("Valor Médio por Transação Balcão", f"R$ {receita_balcao_media:,.2f}")
-
-# 🔸 Cálculo das métricas líquidas (excluindo Vendas Balcão)
-receita_liquida = vendas_total - receita_balcao_total
-transacoes_liquidas = quantidade_transacoes - quantidade_balcao_transacoes
-ticket_medio_liquido = receita_liquida / transacoes_liquidas if transacoes_liquidas > 0 else 0
-
-# 🔸 Exibição das métricas líquidas
-st.markdown("## Métricas de Receita (Excluindo Vendas Balcão)")
-col_liquido1, col_liquido2, col_liquido3 = st.columns(3)
-
-col_liquido1.metric("Receita Líquida", f"R$ {receita_liquida:,.2f}", delta_color="normal")
-col_liquido2.metric("Transações Líquidas", transacoes_liquidas)
-col_liquido3.metric("Ticket Médio Modificado", f"R$ {ticket_medio_liquido:,.2f}")
-
-
-opcoes_graficos = [
-    "Ticket Médio por Técnico",
-    "Receita Total por Técnico",
-    "Receita Mão de Obra por Técnico",
-    "Receita de Peças por Técnico"
-]
-
-grafico_selecionado = st.radio("Escolha um gráfico para visualizar:", opcoes_graficos)
-
-ticket_medio = df_filtrado.groupby('TÉCNICO')['VALOR R$'].mean().reset_index()
-ticket_medio.rename(columns={'VALOR R$': 'ticket médio'}, inplace=True)
-
-receita_total = df_filtrado.groupby('TÉCNICO')['VALOR R$'].sum().reset_index()
-receita_total.rename(columns={'VALOR R$': 'receita total'}, inplace=True)
-
-df_filtrado['M.O'] = pd.to_numeric(df_filtrado['M.O'], errors='coerce').fillna(0)
-receita_mao_de_obra = df_filtrado.groupby('TÉCNICO')['M.O'].sum().reset_index()
-receita_mao_de_obra.rename(columns={'M.O': 'receita mão de obra'}, inplace=True)
-
-df_filtrado['PEÇAS'] = pd.to_numeric(df_filtrado['PEÇAS'], errors='coerce').fillna(0)
-receita_pecas = df_filtrado.groupby('TÉCNICO')['PEÇAS'].sum().reset_index()
-receita_pecas.rename(columns={'PEÇAS': 'receita peças'}, inplace=True)
-
-if grafico_selecionado == "Ticket Médio por Técnico":
-    st.subheader("Ticket Médio por Técnico")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.dataframe(ticket_medio)
-    with col2:
-        fig_ticket_medio = px.bar(ticket_medio, x='TÉCNICO', y='ticket médio', title="Ticket Médio por Técnico", color='TÉCNICO')
-        st.plotly_chart(fig_ticket_medio, use_container_width=True)
-
-elif grafico_selecionado == "Receita Total por Técnico":
-    st.subheader("Receita Total por Técnico")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.dataframe(receita_total)
-    with col2:
-        fig_receita_total = px.pie(receita_total, names='TÉCNICO', values='receita total', title="Receita Total por Técnico")
-        st.plotly_chart(fig_receita_total, use_container_width=True)
-
-elif grafico_selecionado == "Receita Mão de Obra por Técnico":
-    st.subheader("Receita Mão de Obra por Técnico")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.dataframe(receita_mao_de_obra)
-    with col2:
-        fig_receita_mao_de_obra = px.pie(receita_mao_de_obra, names='TÉCNICO', values='receita mão de obra', title="Receita Mão de Obra por Técnico")
-        st.plotly_chart(fig_receita_mao_de_obra, use_container_width=True)
-
-elif grafico_selecionado == "Receita de Peças por Técnico":
-    st.subheader("Receita de Peças por Técnico")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.dataframe(receita_pecas)
-    with col2:
-        fig_receita_pecas = px.pie(receita_pecas, names='TÉCNICO', values='receita peças', title="Receita de Peças por Técnico")
-        st.plotly_chart(fig_receita_pecas, use_container_width=True)
+if st.checkbox("Mostrar detalhes por Grupo de Despesa para cada Usuário"):
+    detalhado = df_exibicao.groupby(['USUÁRIO', 'GRUPO DESPESAS'])['VALOR R$'].sum().reset_index()
+    # Tabela dinâmica
+    tabela_pivot = detalhado.pivot(index='USUÁRIO', columns='GRUPO DESPESAS', values='VALOR R$').fillna(0)
+    st.dataframe(tabela_pivot, use_container_width=True)
+    
+    # Gráfico de barras empilhadas (stacked bar)
+    fig_stack = px.bar(
+        detalhado,
+        x='USUÁRIO',
+        y='VALOR R$',
+        color='GRUPO DESPESAS',
+        title='Soma das Despesas por Grupo para cada Usuário',
+        text_auto=True
+    )
+    st.plotly_chart(fig_stack, use_container_width=True)
