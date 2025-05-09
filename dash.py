@@ -148,7 +148,8 @@ with col7:
 
 st.markdown("## Despesas por Usuário")
 usuario_despesas = df_filtrado.copy()
-usuario_despesas = usuario_despesas.groupby("USUÁRIO", as_index=False)["VALOR R$"].sum()
+usuario_despesas= usuario_despesas[usuario_despesas['USUÁRIO'] != "CORPORATIVO"]
+usuario_despesas = usuario_despesas.groupby('USUÁRIO')['VALOR R$'].sum().reset_index() 
 usuario_despesas = usuario_despesas.sort_values(by="VALOR R$", ascending=False)
 col8, col9 = st.columns(2)
 with col8:
